@@ -3,7 +3,6 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
-import { createServer as createViteServer } from "vite";
 
 dotenv.config();
 
@@ -150,18 +149,18 @@ Output harus dikembalikan dalam format JSON terstruktur yang valid sesuai dengan
 - Karakter Vokal / Penyanyi: ${vocalistType || "Pria"}
 
 Pastikan:
-1. sunoPrompt ditulis dalam Bahasa Inggris, minimal 120 kata.
-2. sunoStyleTags minimal berisi 30 tags relevan dipisahkan koma.
-3. deskripsi minimal 2 paragraf yang emosional dan menjelaskan makna lagu.
+1. sunoPrompt ditulis dalam Bahasa Inggris, maksimal 40 kata (padat, kaya deskripsi instrumen/aransemen).
+2. sunoStyleTags berisi 5-8 tags paling relevan dalam Bahasa Inggris.
+3. deskripsi berisi 2 paragraf yang emosional dan menjelaskan makna lagu.
 4. lirik memiliki struktur penanda yang lengkap, rima yang enak, dan hook yang sangat kuat di bagian chorus.
-5. videoMusicPrompt ditulis dalam Bahasa Inggris, minimal 150 kata, menceritakan visual sinematik yang WAJIB dibintangi oleh model klip / aktor / talent berparas orang Indonesia asli (Indonesian model/actor with native Indonesian look), dengan latar belakang pemandangan, lingkungan, atau estetika lokal Indonesia yang sangat relevan dengan tema lagu.
+5. videoMusicPrompt ditulis dalam Bahasa Inggris, minimal 100 kata, menceritakan visual sinematik yang WAJIB dibintangi oleh model klip / aktor / talent berparas orang Indonesia asli (Indonesian model/actor with native Indonesian look), dengan latar belakang pemandangan, lingkungan, atau estetika lokal Indonesia yang sangat relevan dengan tema lagu.
 6. thumbnailPrompt dalam Bahasa Indonesia, wajib dirancang khusus untuk ukuran gambar lanskap 16:9, menampilkan model klip orang Indonesia (pria/wanita/anak-anak sesuai kecocokan vokal & tema) dengan ekspresi emosional yang dramatis, dilengkapi deskripsi teks/tulisan di gambar yang eksentrik, berani, ekspresif, dan sangat menarik perhatian penonton YouTube saat scrolling.
 7. albumCoverPrompt dalam Bahasa Inggris, wajib dirancang khusus untuk ukuran gambar lanskap 16:9 (aspect ratio 16:9, sertakan tag '--ar 16:9' atau '16:9 aspect ratio' di dalamnya), dengan menampilkan potret berkarakter orang Indonesia (Indonesian look model/character portrait) sebagai subjek utama, dipadukan dengan deskripsi tulisan/tipografi judul yang eksentrik, ekspresif, artistik, dan sangat menarik menyatu dengan visual cover.
 8. Pada bagian seo:
    - judulSEO harus berupa judul YouTube yang sangat menarik (clickbait aman) dan SEO-friendly.
-   - deskripsiSEO berisi penjelasan mendalam mengenai makna, pesan emosional, dan filosofi lagu berdasarkan tema dan judul (minimal 150 kata).
-   - hashtags berisi 30 hashtags relevan.
-   - keywords berisi 50 keywords relevan.
+   - deskripsiSEO berisi penjelasan singkat makna dan filosofi lagu (1-2 kalimat).
+   - hashtags berisi 5 hashtags utama.
+   - keywords berisi 5 keywords utama.
 9. Jika genre adalah DJ atau EDM, pastikan mengisi field tambahan tingkatEnergi, suasanaLagu, efekAudioDisarankan, dan platformCocok secara mendetail. Jika bukan DJ, field tersebut bisa diisi nilai default yang relevan.`;
 
     const responseSchema = {
@@ -187,10 +186,9 @@ Pastikan:
             verse2: { type: Type.STRING },
             bridge: { type: Type.STRING },
             finalChorus: { type: Type.STRING },
-            outro: { type: Type.STRING },
-            fullText: { type: Type.STRING }
+            outro: { type: Type.STRING }
           },
-          required: ["verse1", "chorus", "fullText"]
+          required: ["verse1", "chorus"]
         },
         vokalSaran: { type: Type.STRING },
         mixingSaran: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -206,17 +204,6 @@ Pastikan:
             keywords: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
           required: ["judulSEO", "deskripsiSEO", "hashtags", "keywords"]
-        },
-        versiAlternatif: {
-          type: Type.OBJECT,
-          properties: {
-            akustik: { type: Type.STRING },
-            djRemix: { type: Type.STRING },
-            rock: { type: Type.STRING },
-            loFi: { type: Type.STRING },
-            orchestra: { type: Type.STRING }
-          },
-          required: ["akustik", "djRemix", "rock", "loFi", "orchestra"]
         },
         potensiViral: {
           type: Type.OBJECT,
@@ -234,7 +221,7 @@ Pastikan:
       required: [
         "judul", "genre", "subGenre", "mood", "tempo", "bpm", "instrumen", "deskripsi", "sunoPrompt", "sunoStyleTags",
         "lirik", "vokalSaran", "mixingSaran", "videoMusicPrompt", "thumbnailPrompt", "albumCoverPrompt",
-        "seo", "versiAlternatif", "potensiViral"
+        "seo", "potensiViral"
       ]
     };
 
@@ -277,10 +264,9 @@ Pastikan:
     const jsonText = response.text?.trim() || "{}";
     const songData = JSON.parse(jsonText);
 
-    // Expand deskripsiSEO programmatically to 800+ words to prevent Gemini timeouts
-    if (songData && songData.seo) {
-      const maknaFilosofi = songData.seo.deskripsiSEO || songData.deskripsi || "";
-      
+    // Expand properties programmatically to save tokens and avoid timeout limits on Vercel
+    if (songData) {
+      // 1. Build lirik.fullText
       const parts = songData.lirik || {};
       const lirikLengkap = [
         parts.intro ? `[Intro]\n${parts.intro}\n` : "",
@@ -292,13 +278,131 @@ Pastikan:
         parts.finalChorus ? `[Final Chorus]\n${parts.finalChorus}\n` : "",
         parts.outro ? `[Outro]\n${parts.outro}\n` : ""
       ].filter(Boolean).join("\n");
+      
+      if (!songData.lirik) songData.lirik = {};
+      songData.lirik.fullText = lirikLengkap || "Lirik belum tersedia.";
 
+      // 2. Expand Suno Style Tags (target exactly 30 style tags)
+      const defaultStyleTags = [
+        songData.genre ? songData.genre.toLowerCase() : "pop",
+        songData.subGenre ? songData.subGenre.toLowerCase() : "modern",
+        "high quality", "studio production", "clear vocals", "well-structured", "mastered", "expressive"
+      ];
+      const rawTags = Array.isArray(songData.sunoStyleTags) ? songData.sunoStyleTags : [];
+      const mergedTags = Array.from(new Set([...rawTags, ...defaultStyleTags])).slice(0, 30);
+      const extraPads = [
+        "analog warmth", "professional mix", "radio edit", "smooth transitions", "balanced audio",
+        "rich instrumentation", "dynamic range", "studio capture", "acoustic presence", "ambient space",
+        "tight drums", "polished production", "melodic flow", "harmonic depth", "vocal clarity",
+        "soundstage", "stereo image", "crisp highs", "solid low-end", "warm midrange", "commercial standard"
+      ];
+      let currentTags = [...mergedTags];
+      for (const pad of extraPads) {
+        if (currentTags.length >= 30) break;
+        if (!currentTags.includes(pad)) {
+          currentTags.push(pad);
+        }
+      }
+      songData.sunoStyleTags = currentTags;
+
+      // 3. Build suggestions & arrays if sparse
+      if (!Array.isArray(songData.mixingSaran) || songData.mixingSaran.length < 3) {
+        songData.mixingSaran = [
+          "Gunakan high-pass filter di bawah 90Hz untuk vokal utama agar frekuensi rendah tetap bersih.",
+          "Berikan kompresi optik seimbang untuk menjaga dinamika emosi vokal tetap stabil.",
+          "Tambahkan stereo plate reverb dengan pre-delay hangat untuk dimensi ruang yang lebar.",
+          "Gunakan dynamic EQ pada instrumen pengiring untuk memberikan ruang frekuensi bagi vokal."
+        ];
+      }
+      if (!Array.isArray(songData.efekAudioDisarankan) || songData.efekAudioDisarankan.length < 3) {
+        songData.efekAudioDisarankan = [
+          "Warm Analog Reverb",
+          "Tape Delay Sync",
+          "Stereo Widening",
+          "Parallel Compression"
+        ];
+      }
+      if (!Array.isArray(songData.platformCocok) || songData.platformCocok.length < 2) {
+        songData.platformCocok = [
+          "TikTok",
+          "YouTube Shorts",
+          "Instagram Reels",
+          "Spotify",
+          "RBT / Ringtone"
+        ];
+      }
+
+      // 4. Expand SEO Keywords (target exactly 50 keywords)
+      if (!songData.seo) songData.seo = {};
+      const rawKeywords = Array.isArray(songData.seo.keywords) ? songData.seo.keywords : [];
+      const baseKeywords = [
+        `lagu ${songData.judul}`, `lirik ${songData.judul}`, `makna lagu ${songData.judul}`,
+        `lagu ${songData.genre} terbaru`, `suno ai ${songData.genre}`, `video musik ${songData.judul}`,
+        "lagu viral tiktok", "lagu indonesia terbaru", "songwriter pro", "ai song generator",
+        "cara membuat lagu", "lirik estetik", "musik viral", "lagu rindu", "lagu sedih",
+        "lagu senja", "musik indie", "musik santai", "lagu akustik", "remix dugem terbaru",
+        "lagu hits youtube", "karya seni musik", "lagu emosional", "lagu menyentuh hati", "musik relaksasi"
+      ];
+      const mergedKeywords = Array.from(new Set([...rawKeywords, ...baseKeywords])).slice(0, 50);
+      const extraKeywords = [
+        "music production", "suno ai tutorial", "best ai music", "lirik lagu indonesia", "lagu hits terbaru",
+        "lagu baper", "lagu patah hati", "melodi indah", "instrumen menenangkan", "vokal merdu",
+        "mixing mastering pro", "lagu kafe", "teman belajar", "musik kerja", "night drive song",
+        "lagu estetik tiktok", "reels instagram viral", "shorts music", "creative writing", "puisi lagu",
+        "tembang kenangan", "lagu nostalgia", "kumpulan lagu hits", "lagu pop terbaik", "lagu galau"
+      ];
+      let currentKeywords = [...mergedKeywords];
+      for (const kw of extraKeywords) {
+        if (currentKeywords.length >= 50) break;
+        if (!currentKeywords.includes(kw)) {
+          currentKeywords.push(kw);
+        }
+      }
+      songData.seo.keywords = currentKeywords;
+
+      // 5. Expand SEO Hashtags (target exactly 30 hashtags)
+      const rawHashtags = Array.isArray(songData.seo.hashtags) ? songData.seo.hashtags : [];
+      const cleanedHashtags = rawHashtags.map((h: string) => h.startsWith("#") ? h : `#${h}`);
+      const baseHashtags = [
+        `#${(songData.judul || "").replace(/\s+/g, "")}`,
+        `#Lirik${(songData.judul || "").replace(/\s+/g, "")}`,
+        "#SongwriterPro", "#SunoAI", "#LaguBaru", "#MusikViral", "#AIGenerated", "#Songwriting",
+        "#LaguIndonesia", "#NewRelease", "#MusicVideo", "#TiktokViral", "#CoverArt", "#Visualizer",
+        "#LirikEstetik", "#LaguGalau", "#MusikIndie", "#DugemRemix", "#TrendingMusic"
+      ];
+      const mergedHashtags = Array.from(new Set([...cleanedHashtags, ...baseHashtags])).slice(0, 30);
+      const extraHashtags = [
+        "#MelodiIndah", "#BaitEmosional", "#SeniMusik", "#MusisiAI", "#PenciptaLagu",
+        "#LaguBaper", "#StudioMusik", "#MixingPro", "#AudioHQ", "#KaryaAnakBangsa", "#YouTubeMusic"
+      ];
+      let currentHashtags = [...mergedHashtags];
+      for (const ht of extraHashtags) {
+        if (currentHashtags.length >= 30) break;
+        if (!currentHashtags.includes(ht)) {
+          currentHashtags.push(ht);
+        }
+      }
+      songData.seo.hashtags = currentHashtags;
+
+      // 6. Build Alternative Versions (akustik, djRemix, rock, loFi, orchestra)
+      const songTitleClean = songData.judul || "Lagu Ini";
+      const songSunoPrompt = songData.sunoPrompt || "beautiful melody, clear vocals";
+      songData.versiAlternatif = {
+        akustik: `Acoustic version of "${songTitleClean}". ${songSunoPrompt.slice(0, 60)}. Soft fingerstyle acoustic guitar, warm acoustic piano, emotional and delicate vocals, spacious ambient room reverb, clean acoustic mix.`,
+        djRemix: `DJ Remix dance version of "${songTitleClean}". ${songSunoPrompt.slice(0, 60)}. Upbeat electronic dance music, energetic club beat, pumping synth bassline, build-up riser, euphoric drop, modern party remix.`,
+        rock: `Rock version of "${songTitleClean}". ${songSunoPrompt.slice(0, 60)}. Energetic alternative rock, crunchy overdrive electric guitars, driving bass guitar, punchy drums, expressive powerful vocals.`,
+        loFi: `Lo-Fi chilled version of "${songTitleClean}". ${songSunoPrompt.slice(0, 60)}. Dusty vinyl crackle, nostalgic Rhodes piano chords, mellow synth bass, relaxed vocal style, cozy late-night bedroom vibes.`,
+        orchestra: `Orchestral cinematic version of "${songTitleClean}". ${songSunoPrompt.slice(0, 60)}. Majestic symphonic arrangement, sweeping violin section, concert grand piano, timpani, emotional and epic movie soundtrack feel.`
+      };
+
+      // 7. Expand deskripsiSEO to 800+ words
+      const maknaFilosofi = songData.seo.deskripsiSEO || songData.deskripsi || "";
       const instrumenList = Array.isArray(songData.instrumen) ? songData.instrumen.join(", ") : "Gitar, Piano, Bass, Drums";
       const mixingList = Array.isArray(songData.mixingSaran) ? songData.mixingSaran.join("\n- ") : "Gunakan EQ presisi pada vokal\n- Tambahkan reverb stereo lembut\n- Lakukan kompresi dinamis seimbang";
-      const keywordList = Array.isArray(songData.seo.keywords) ? songData.seo.keywords.join(", ") : "";
-      const hashtagList = Array.isArray(songData.seo.hashtags) ? songData.seo.hashtags.map((h: string) => h.startsWith("#") ? h : `#${h}`).join(" ") : "";
-      const efekList = Array.isArray(songData.efekAudioDisarankan) ? songData.efekAudioDisarankan.join(", ") : "reverb, delay, stereo widening";
-      const platformList = Array.isArray(songData.platformCocok) ? songData.platformCocok.join(", ") : "TikTok, YouTube, Instagram, Spotify";
+      const keywordList = songData.seo.keywords.join(", ");
+      const hashtagList = songData.seo.hashtags.join(" ");
+      const efekList = songData.efekAudioDisarankan.join(", ");
+      const platformList = songData.platformCocok.join(", ");
 
       const expandedDeskripsi = `🎵 **${songData.judul || "Release Lagu Terbaru"}** - Official Song Release & Detailed Production Notes
 Genre Utama: ${songData.genre || "Pop"} | Sub-Genre: ${songData.subGenre || "Modern"}
@@ -322,7 +426,7 @@ Arsitektur melodi dan pemilihan progresi akor dirancang khusus untuk membangun i
 📝 **II. LIRIK LENGKAP LAGU (${songData.judul || "Lirik Resmi"})**
 Berikut adalah susunan lirik lengkap beserta panduan struktur lagu untuk Suno AI:
 
-${lirikLengkap || parts.fullText || "Lirik belum tersedia secara terstruktur."}
+${lirikLengkap || "Lirik belum tersedia secara terstruktur."}
 
 ---
 
@@ -371,8 +475,8 @@ Terima kasih yang sebesar-besarnya atas apresiasi, waktu, dan cinta yang Anda be
 ---
 
 🔍 **VI. TAGS & KEYWORDS SEO YOUTUBE**
-- **Keywords**: ${keywordList || "Lagu pop indonesia terbaru, Suno AI songwriting, Lirik lagu romantis, Lagu viral TikTok"}
-- **Hashtags**: ${hashtagList || "#SongwriterPro #SunoAI #LaguTerbaru #MusikViral"}
+- **Keywords**: ${keywordList}
+- **Hashtags**: ${hashtagList}
 - **Platform Distribusi Populer**: ${platformList}
 `;
 
@@ -438,6 +542,7 @@ app.post("/api/songwriter/generate-cover", async (req, res) => {
 // Vite middleware for development or Static server for production
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
