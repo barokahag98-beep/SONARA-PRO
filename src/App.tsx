@@ -204,8 +204,20 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Gagal menghubungi server.");
+        let errorMessage = "Gagal menghubungi server.";
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } else {
+            const text = await response.text();
+            errorMessage = text || errorMessage;
+          }
+        } catch (e) {
+          errorMessage = `HTTP error! Status: ${response.status}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const songData = await response.json();
@@ -236,8 +248,20 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.error || "Gagal membuat cover album.");
+        let errorMessage = "Gagal membuat cover album.";
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.error || errorMessage;
+          } else {
+            const text = await response.text();
+            errorMessage = text || errorMessage;
+          }
+        } catch (e) {
+          errorMessage = `HTTP error! Status: ${response.status}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const imageData = await response.json();
