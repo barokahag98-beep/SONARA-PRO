@@ -159,7 +159,7 @@ Pastikan:
 7. albumCoverPrompt dalam Bahasa Inggris, wajib dirancang khusus untuk ukuran gambar lanskap 16:9 (aspect ratio 16:9, sertakan tag '--ar 16:9' atau '16:9 aspect ratio' di dalamnya), dengan menampilkan potret berkarakter orang Indonesia (Indonesian look model/character portrait) sebagai subjek utama, dipadukan dengan deskripsi tulisan/tipografi judul yang eksentrik, ekspresif, artistik, dan sangat menarik menyatu dengan visual cover.
 8. Pada bagian seo:
    - judulSEO harus berupa judul YouTube yang sangat menarik (clickbait aman) dan SEO-friendly.
-   - deskripsiSEO WAJIB DITULIS DALAM FORMAT SUPER DETAIL HINGGA SEKITAR 800 KATA. Isi deskripsi harus memuat: penjelasan mendalam makna & filosofi lagu berdasarkan tema dan judul, lirik lengkap lagu, struktur lagu, pembagian part instrumen, saran penggunaan lagu (misal backsound, santai, dll), detail kredit/aransemen, daftar keyword pendukung, serta WAJIB menyertakan ajakan hangat untuk LIKE, SUBSCRIBE, dan SHARE video ini secara persuasif agar penonton tergerak menyebarkannya.
+   - deskripsiSEO berisi penjelasan mendalam mengenai makna, pesan emosional, dan filosofi lagu berdasarkan tema dan judul (minimal 150 kata).
    - hashtags berisi 30 hashtags relevan.
    - keywords berisi 50 keywords relevan.
 9. Jika genre adalah DJ atau EDM, pastikan mengisi field tambahan tingkatEnergi, suasanaLagu, efekAudioDisarankan, dan platformCocok secara mendetail. Jika bukan DJ, field tersebut bisa diisi nilai default yang relevan.`;
@@ -276,6 +276,109 @@ Pastikan:
 
     const jsonText = response.text?.trim() || "{}";
     const songData = JSON.parse(jsonText);
+
+    // Expand deskripsiSEO programmatically to 800+ words to prevent Gemini timeouts
+    if (songData && songData.seo) {
+      const maknaFilosofi = songData.seo.deskripsiSEO || songData.deskripsi || "";
+      
+      const parts = songData.lirik || {};
+      const lirikLengkap = [
+        parts.intro ? `[Intro]\n${parts.intro}\n` : "",
+        parts.verse1 ? `[Verse 1]\n${parts.verse1}\n` : "",
+        parts.preChorus ? `[Pre-Chorus]\n${parts.preChorus}\n` : "",
+        parts.chorus ? `[Chorus]\n${parts.chorus}\n` : "",
+        parts.verse2 ? `[Verse 2]\n${parts.verse2}\n` : "",
+        parts.bridge ? `[Bridge]\n${parts.bridge}\n` : "",
+        parts.finalChorus ? `[Final Chorus]\n${parts.finalChorus}\n` : "",
+        parts.outro ? `[Outro]\n${parts.outro}\n` : ""
+      ].filter(Boolean).join("\n");
+
+      const instrumenList = Array.isArray(songData.instrumen) ? songData.instrumen.join(", ") : "Gitar, Piano, Bass, Drums";
+      const mixingList = Array.isArray(songData.mixingSaran) ? songData.mixingSaran.join("\n- ") : "Gunakan EQ presisi pada vokal\n- Tambahkan reverb stereo lembut\n- Lakukan kompresi dinamis seimbang";
+      const keywordList = Array.isArray(songData.seo.keywords) ? songData.seo.keywords.join(", ") : "";
+      const hashtagList = Array.isArray(songData.seo.hashtags) ? songData.seo.hashtags.map((h: string) => h.startsWith("#") ? h : `#${h}`).join(" ") : "";
+      const efekList = Array.isArray(songData.efekAudioDisarankan) ? songData.efekAudioDisarankan.join(", ") : "reverb, delay, stereo widening";
+      const platformList = Array.isArray(songData.platformCocok) ? songData.platformCocok.join(", ") : "TikTok, YouTube, Instagram, Spotify";
+
+      const expandedDeskripsi = `🎵 **${songData.judul || "Release Lagu Terbaru"}** - Official Song Release & Detailed Production Notes
+Genre Utama: ${songData.genre || "Pop"} | Sub-Genre: ${songData.subGenre || "Modern"}
+Tempo & Ritme: ${songData.tempo || "95 BPM"} (${songData.bpm || "95"} BPM)
+Rekomendasi Vokal: ${songData.vokalSaran || "Sesuai Aransemen"}
+Suasana (Mood): ${songData.mood || "Energetik, Emosional"}
+Tingkat Energi: ${songData.tingkatEnergi || "Medium"}
+
+---
+
+📖 **I. MAKNA & FILOSOFI LAGU (DEEP MEANING)**
+Lagu "${songData.judul || "Sajak Cinta"}" merupakan sebuah karya seni musikal yang diciptakan dengan pendekatan estetika modern yang sangat mendalam. 
+
+Filosofi Kreatif & Pesan Utama:
+${maknaFilosofi}
+
+Arsitektur melodi dan pemilihan progresi akor dirancang khusus untuk membangun ikatan emosional langsung dengan pendengar. Setiap bait merefleksikan emosi yang jujur, menciptakan ruang bagi siapa saja yang mendengarnya untuk merenung, merasakan, dan terhubung dengan memori pribadi mereka. Lagu ini bukan sekadar suara, melainkan sebuah perjalanan batin.
+
+---
+
+📝 **II. LIRIK LENGKAP LAGU (${songData.judul || "Lirik Resmi"})**
+Berikut adalah susunan lirik lengkap beserta panduan struktur lagu untuk Suno AI:
+
+${lirikLengkap || parts.fullText || "Lirik belum tersedia secara terstruktur."}
+
+---
+
+🎹 **III. STRUKTUR & DETAIL ARANSEMEN MUSIK**
+Aransemen instrumen lagu ini dirancang secara presisi menggunakan formula songwriting kelas dunia:
+- **Instrumen Dominan**: ${instrumenList}
+- **Rekomendasi Efek Audio**: ${efekList}
+- **Karakter Sound & Vibe**: Kombinasi harmonis antara instrumen akustik alami dan sentuhan modern synthesizer memberikan dimensi ruang (depth) yang sangat kaya.
+
+Detail Perjalanan Aransemen:
+1. **Intro**: Membangun suasana awal yang hangat dan intim, memperkenalkan motif melodi utama lewat ${instrumenList.split(",")[0] || "instrumen akustik"}.
+2. **Verse**: Cerita mulai bergulir. Ritme drum dan bassline mulai masuk secara perlahan untuk mempertegas ketukan emosi.
+3. **Pre-Chorus**: Terjadi peningkatan tensi emosional. Penambahan string pads atau sapuan frekuensi tinggi mempersiapkan klimaks.
+4. **Chorus (Klimaks)**: Semua instrumen (${instrumenList}) beresonansi bersama menghasilkan harmoni vokal yang sangat adiktif dan mudah diingat oleh pendengar sejak putaran pertama.
+5. **Bridge**: Sesi transisi yang intim, memberikan jeda emosi bagi pendengar dengan memfokuskan aransemen pada instrumen minimalis dan vokal yang penuh penjiwaan.
+6. **Outro**: Musik mereda secara perlahan (fade out), meninggalkan kesan damai dan kerinduan emosional yang manis.
+
+---
+
+🎛️ **IV. PANDUAN MIXING & MASTERING PROFESIONAL (PRO TIPS)**
+Untuk menghasilkan kualitas audio standar industri (Radio & Streaming Ready), ikuti petunjuk mixing berikut:
+- **Vokal Utama**: Berikan potongan low-cut yang bersih di bawah 100Hz, kompresi optik seimbang untuk mempertahankan dinamika alami, dan berikan ruang frekuensi yang lebar.
+- **Instrumen & Ketukan**: Jaga frekuensi low-end agar bass tetap bulat dan hangat tanpa menutupi kejelasan vokal.
+- **Rekomendasi Rantai Efek**:
+  - ${mixingList}
+
+---
+
+💡 **V. REKOMENDASI PENGGUNAAN LAGU**
+Karya musik ini sangat fleksibel dan berkarakter, sangat cocok digunakan untuk:
+1. **Backsound Konten**: Pengisi video vlog perjalanan (traveling), sinematik estetik, transisi TikTok, Shorts, dan Reels.
+2. **Media Relaksasi & Fokus**: Menemani aktivitas belajar, bekerja santai di kafe, meditasi emosi, atau berkendara santai di malam hari (night drive).
+3. **Momen Spesial**: Playlist harian Spotify, lagu pengiring berkumpul bersama keluarga, sahabat, atau pasangan tercinta.
+
+---
+
+📢 **DUKUNG KARYA KAMI - LIKE, SUBSCRIBE & SHARE! (CALL TO ACTION)**
+Kami mendedikasikan waktu dan energi kreatif kami untuk menciptakan karya musik yang menyentuh jiwa Anda. Dukungan kecil dari Anda adalah energi luar biasa bagi kami untuk terus berkarya:
+1. 👍 **TEKAN TOMBOL LIKE** jika lagu ini berhasil menyentuh hati Anda atau membuat hari Anda menjadi lebih tenang dan indah.
+2. 🔔 **KLIK SUBSCRIBE & AKTIFKAN LONCENG** agar Anda selalu menjadi orang pertama yang mendapatkan rilis lagu viral, aransemen pro, dan lirik menyentuh terbaru dari channel kami.
+3. 🔄 **SHARE/BAGIKAN VIDEO INI** ke grup WhatsApp keluarga, Instagram Story, status TikTok, atau media sosial Anda lainnya. Bagikan getaran positif dan keindahan melodi ini kepada orang-orang terkasih!
+4. 💬 **TULIS KOMENTAR DI BAWAH**: Tuliskan kesan pertama Anda saat mendengar lagu ini, bagian lirik mana yang paling Anda sukai, atau di mana Anda sedang mendengarkan lagu ini sekarang. Kami membaca setiap komentar Anda!
+
+Terima kasih yang sebesar-besarnya atas apresiasi, waktu, dan cinta yang Anda berikan. Selamat menikmati lagu ini! 🙏✨
+
+---
+
+🔍 **VI. TAGS & KEYWORDS SEO YOUTUBE**
+- **Keywords**: ${keywordList || "Lagu pop indonesia terbaru, Suno AI songwriting, Lirik lagu romantis, Lagu viral TikTok"}
+- **Hashtags**: ${hashtagList || "#SongwriterPro #SunoAI #LaguTerbaru #MusikViral"}
+- **Platform Distribusi Populer**: ${platformList}
+`;
+
+      songData.seo.deskripsiSEO = expandedDeskripsi;
+    }
+
     res.json(songData);
 
   } catch (error: any) {
