@@ -1,0 +1,6 @@
+{
+  "name": "SONARA PRO",
+  "description": "Asisten Penulisan Lagu Profesional untuk Suno AI, Veo, Midjourney, dan SEO YouTube",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
